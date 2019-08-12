@@ -1,9 +1,9 @@
 % Generated on: 190810
-% Last modification: 190810
+% Last modification: 190812
 % Author: Suwon Lee from Seoul National University
 
 classdef spacePH < handle
-  properties
+  properties (SetObservable)
     initialPosition
     initialUnitTangent
     finalPosition
@@ -22,21 +22,21 @@ classdef spacePH < handle
   end
 
   methods
-    function obj = set.initialPosition(obj,value)
+    function set.initialPosition(obj,value)
       if numel(value)==3
         obj.initialPosition = value(:)';
       else
         error('initialPosition should be a vector with dimension 3');
       end
     end
-    function obj = set.finalPosition(obj,value)
+    function set.finalPosition(obj,value)
       if numel(value)==3
         obj.finalPosition = value(:)';
       else
         error('finalPosition should be a vector with dimension 3');
       end      
     end
-    function obj = set.initialUnitTangent(obj,value)
+    function set.initialUnitTangent(obj,value)
       if numel(value)==3
         if abs(norm(value)-1)>eps
           warning('The vector t_i is normalized into a unit vector');
@@ -46,7 +46,7 @@ classdef spacePH < handle
         error('Invalid initialUnitTangent');
       end
     end
-    function obj = set.finalUnitTangent(obj,value)
+    function set.finalUnitTangent(obj,value)
       if numel(value)==3
         if abs(norm(value)-1)>eps
           warning('The vector t_f is normalized into a unit vector');
@@ -55,26 +55,6 @@ classdef spacePH < handle
       else
         error('Invalid finalUnitTangent');
       end
-    end
-    function obj = updateTransients(obj)
-      [R,f] = spacePH.getRotAndScale(obj.initialPosition,obj.finalPosition);
-      [tiC,tfC,dpC,SC] = spacePH.cvt2canon(obj.initialUnitTangent,obj.finalUnitTangent,obj.finalPosition-obj.initialPosition,obj.desiredArcLength,R,f);
-      [tiP,tiA] = spacePH.getPolarAzimuth(tiC);
-      [tfP,tfA] = spacePH.getPolarAzimuth(tfC);
-      [c0,c1,c2] = spacePH.getCoeffs27(tiP,tfP,tiA,tfA,SC,obj.psi0,obj.psi2);
-      w = spacePH.getws(c0,c1,c2);
-      [A0,A1,A2] = spacePH.getQuaternions(tiC,tfC,dpC,w,obj.psi0,obj.psi2);
-      controlPoints_canon = spacePH.getBezierControlPoints([0,0,0],A0,A1,A2);
-
-      controlPoints_ = zeros(size(controlPoints_canon));
-      for i = 1:6
-        controlPoints_(i,:) = (1/f*R'*controlPoints_canon(i,:)')' + obj.initialPosition;
-      end
-
-      obj.quaternionA0 = A0;
-      obj.quaternionA1 = A1;
-      obj.quaternionA2 = A2;
-      obj.controlPoints = controlPoints_;
     end
     function r = curve(obj,xi)
       r = spacePH.phCurve(obj.controlPoints,xi);
@@ -92,10 +72,48 @@ classdef spacePH < handle
       [R,f] = spacePH.getRotAndScale(obj.initialPosition,obj.finalPosition);
       obj.spatialRotation = R;
       obj.scaleFactor     = f;
+      obj.attachListner();          % Attch listner to perceive a change of properties.
+      obj = obj.updateTransients();
+    end
+    function obj = updateTransients(obj)
+      [R,f]               = spacePH.getRotAndScale(obj.initialPosition,obj.finalPosition);
+      [tiC,tfC,dpC,SC]    = spacePH.cvt2canon(obj.initialUnitTangent,obj.finalUnitTangent,obj.finalPosition-obj.initialPosition,obj.desiredArcLength,R,f);
+      [tiP,tiA]           = spacePH.getPolarAzimuth(tiC);
+      [tfP,tfA]           = spacePH.getPolarAzimuth(tfC);
+      [c0,c1,c2]          = spacePH.getCoeffs27(tiP,tfP,tiA,tfA,SC,obj.psi0,obj.psi2);
+      w                   = spacePH.getws(c0,c1,c2);
+      [A0,A1,A2]          = spacePH.getQuaternions(tiC,tfC,dpC,w,obj.psi0,obj.psi2);
+      controlPoints_canon = spacePH.getBezierControlPoints([0,0,0],A0,A1,A2);
+      controlPoints_      = zeros(size(controlPoints_canon));
+      for i = 1:6
+        controlPoints_(i,:) = (1/f*R'*controlPoints_canon(i,:)')' + obj.initialPosition;
+      end
+      obj.quaternionA0 = A0;
+      obj.quaternionA1 = A1;
+      obj.quaternionA2 = A2;
+      obj.controlPoints = controlPoints_;
+    end
+    function attachListner(obj)
+      addlistener(obj,'initialPosition','PostSet',@spacePH.propChange);
+      addlistener(obj,'initialUnitTangent','PostSet',@spacePH.propChange);
+      addlistener(obj,'finalPosition','PostSet',@spacePH.propChange);
+      addlistener(obj,'finalUnitTangent','PostSet',@spacePH.propChange);
+      addlistener(obj,'desiredArcLength','PostSet',@spacePH.propChange);
+      addlistener(obj,'psi0','PostSet',@spacePH.propChange);
+      addlistener(obj,'psi2','PostSet',@spacePH.propChange);
     end
   end
   
-  methods (Static, Hidden)
+  methods (Static, Hidden)  % For event listner callback
+    function propChange(metaProp,eventData)
+       h = eventData.AffectedObject;
+       propName = metaProp.Name;
+       disp(['The ',propName,' property has changed.'])
+       h.updateTransients();
+    end
+  end
+  
+  methods (Static, Hidden)  % For computation of space PH curve
     function [R,f] = getRotAndScale(pi,pf)
       f = 1/norm(pi-pf);
       dp = pf-pi;
@@ -162,16 +180,8 @@ classdef spacePH < handle
       si = sin(.5*tip);
       cf = cos(.5*tfp);
       sf = sin(.5*tfp);
-      A01 = w*cos(psi0)*ci*cos(tia);
-      A02 = w*ci*(cos(psi0)*sin(tia)+sin(psi0)*cos(tia));
-      A03 = w*sin(psi0)*si;
-      A04 = w*cos(psi0)*si;
-      A0  = [A01,A02,A03,A04];
-      A21 = w*cos(psi2)*cf*cos(tfa);
-      A22 = w*cf*(cos(psi2)*sin(tfa)+sin(psi2)*cos(tfa));
-      A23 = w*sin(psi2)*sf;
-      A24 = w*cos(psi2)*sf;
-      A2  = [A21,A22,A23,A24];
+      A0 = w*spacePH.quatMult(ci*[cos(tia),sin(tia),0,0]+si*[0,0,0,1],[cos(psi0),sin(psi0),0,0]);
+      A2 = w*spacePH.quatMult(cf*[cos(tfa),sin(tfa),0,0]+sf*[0,0,0,1],[cos(psi2),sin(psi2),0,0]);
 
       cA0 = spacePH.quatConj(A0);
       cA2 = spacePH.quatConj(A2);
