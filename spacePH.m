@@ -214,4 +214,11 @@ classdef spacePH < handle
       end
     end
   end
+
+  methods (Static) % Methods users can use.
+    function [alpha,beta] = quat2complex(quaternionA)
+      alpha = quaternionA(1) + quaternionA(2)*i;
+      beta  = quaternionA(4) + quaternionA(3)*i;
+    end
+  end
 end

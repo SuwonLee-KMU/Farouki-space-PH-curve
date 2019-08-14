@@ -62,3 +62,8 @@ view([-156.2736 43.8201]);
 figure(2);
 set(gca,'color','none');
 view([-156.2736 43.8201]);
+%% Usage of pointPH class
+help pointPH
+aa = spacePH(p_i,p_f,t_i,t_f,2);
+bb = pointPH(aa);
+disp(bb);
