@@ -1,5 +1,5 @@
 % Generated on: 190810
-% Last modification: 190812
+% Last modification: 190816
 % Author: Suwon Lee from Seoul National University
 
 classdef spacePH < handle
@@ -21,7 +21,7 @@ classdef spacePH < handle
     controlPoints
   end
 
-  methods
+  methods % Methods user can use
     function set.initialPosition(obj,value)
       if numel(value)==3
         obj.initialPosition = value(:)';
@@ -58,6 +58,24 @@ classdef spacePH < handle
     end
     function r = curve(obj,xi)
       r = spacePH.phCurve(obj.controlPoints,xi);
+    end
+    function [alpha,beta] = quat2complex(quaternionA)
+      alpha = quaternionA(1) + quaternionA(2)*i;
+      beta  = quaternionA(4) + quaternionA(3)*i;
+    end
+    function [psi0_optimal,psi2_optimal] = getOptimalPsi(obj)
+      options  = optimoptions(@fmincon,'display','iter');
+      optFcn   = @(X) spacePH.costFcn(X(1),X(2),obj);
+      [x,fval] = fmincon(optFcn,[0;0],[],[],[],[],[0;0],[2*pi;2*pi],[],options);
+      disp(['Optimal \psi0 = ',num2str(x(1)*180/pi),' deg']);
+      disp(['Optimal \psi2 = ',num2str(x(2)*180/pi),' deg']);
+      disp(['Optimal cost = ',num2str(fval)]);
+      psi0_optimal = x(1);
+      psi2_optimal = x(2);
+    end
+    function pointPHobj = evaluate(obj,xi)
+      pointPHobj = pointPH(obj);
+      pointPHobj.spacePHparameter = xi;
     end
   end
 
@@ -107,8 +125,6 @@ classdef spacePH < handle
   methods (Static, Hidden)  % For event listner callback
     function propChange(metaProp,eventData)
        h = eventData.AffectedObject;
-       propName = metaProp.Name;
-       disp(['The ',propName,' property has changed.'])
        h.updateTransients();
     end
   end
@@ -215,10 +231,18 @@ classdef spacePH < handle
     end
   end
 
-  methods (Static) % Methods users can use.
-    function [alpha,beta] = quat2complex(quaternionA)
-      alpha = quaternionA(1) + quaternionA(2)*i;
-      beta  = quaternionA(4) + quaternionA(3)*i;
-    end
+  methods (Static)  % For the optimization of psi0,psi2.
+    function E_RMF = costFcn(psi0,psi2,spacePHobj)
+      p_i = spacePHobj.initialPosition;
+      t_i = spacePHobj.initialUnitTangent;
+      p_f = spacePHobj.finalPosition;
+      t_f = spacePHobj.finalUnitTangent;
+      S   = spacePHobj.desiredArcLength;
+      A   = spacePH(p_i,p_f,t_i,t_f,S);
+      A.psi0 = psi0;
+      A.psi2 = psi2;
+      B     = A.evaluate(0);
+      E_RMF = B.computeE_RMF(30);
+    end 
   end
 end

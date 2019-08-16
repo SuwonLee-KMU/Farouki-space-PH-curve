@@ -1,5 +1,5 @@
 % Generated on: 190814
-% Last modification: 190814
+% Last modification: 190816
 % Author: Suwon Lee from Seoul National University
 %
 % pointPH class evaluate the curve at certain point on the curve with the
@@ -19,7 +19,11 @@
 % - curvature       : curvature of the curve, kappa
 % - torsion         : torsion of the curve, tau
 % - FrenetBasis     : basis vectors of the Frenet frame, [t,p,b]
-
+% 
+% Warning: Since pointPH.spacePHobject is a handle class, the user should
+% call pointPH.updateTransients() function manually to update the
+% corresponding curve after modifying pointPH.spacePHobj, or the curve is
+% not updated automatically.
 classdef pointPH < handle
   properties (SetObservable)
     spacePHobject
@@ -42,6 +46,9 @@ classdef pointPH < handle
       else
         error('invalid spacePHobj');
       end
+    end
+    function set.spacePHparameter(obj,value)
+      obj.spacePHparameter = value(:);
     end
     function obj = updateTransients(obj)
       obj.positionVector  = curve(obj);
@@ -93,6 +100,13 @@ classdef pointPH < handle
       t = dr./vecnorm(dr,2,2);
       p = cross(cross(dr,ddr,2),t,2)./vecnorm(cross(dr,ddr,2));
       b = cross(dr,ddr,2)./vecnorm(cross(dr,ddr,2),2,2);
+    end
+    function E_RMF = computeE_RMF(obj,npoints)
+      A     = obj.spacePHobject;
+      B     = pointPH(A);
+      B.spacePHparameter = linspace(0,1,npoints);
+      dxi   = [0;diff(B.spacePHparameter)];
+      E_RMF = sum(B.curvature.^2.*B.parametricSpeed.*dxi);
     end
   end
 
@@ -174,8 +188,6 @@ classdef pointPH < handle
   methods (Static, Hidden)  % For event listner callback
     function propChange(metaProp,eventData)
        h = eventData.AffectedObject;
-       propName = metaProp.Name;
-       disp(['The ',propName,' property has changed.'])
        h.updateTransients();
     end
   end

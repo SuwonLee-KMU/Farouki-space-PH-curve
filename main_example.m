@@ -1,9 +1,13 @@
 % Generated on: 190810
-% Last modification : 190812
+% Last modification : 190816
 % Author: Suwon Lee from Seoul National University
 %
 % This code runs the examples considered in Farouki(2019).
 % https://linkinghub.elsevier.com/retrieve/pii/S0747717119300197
+% Also referenced following papers for some methods.
+% http://www.boundaryvalueproblems.com/content/2011/1/829543
+% https://linkinghub.elsevier.com/retrieve/pii/S0167839607001276
+% https://linkinghub.elsevier.com/retrieve/pii/S0747717108001041
 % 
 % User can use spacePH handle class to allocate a new Pythagorean-hodograph
 % (PH) curve.
@@ -42,15 +46,9 @@ end
 close all; clc;
 A1 = spacePH(p_i,p_f,t_i,t_f,1.25);
 A2 = spacePH(p_i,p_f,t_i,t_f,1.25);
-A1.psi0 = 0;
-A1.psi2 = 0;
-A2.psi0 = 0;
-A2.psi2 = 0;
 B1 = paintPH(A1,1);
 B2 = paintPH(A2,2);
-B1.visualize;
-B2.visualize;
-for i = 1:7
+for i = 0:7
   A1.psi0 = pi/4*i;
   A2.psi2 = pi/4*i;
   B1.visualize;
@@ -63,7 +61,15 @@ figure(2);
 set(gca,'color','none');
 view([-156.2736 43.8201]);
 %% Usage of pointPH class
+clc; 
 help pointPH
-aa = spacePH(p_i,p_f,t_i,t_f,2);
-bb = pointPH(aa);
-disp(bb);
+aa = spacePH(p_i,p_f,t_i,t_f,10);
+cc = aa.evaluate(linspace(0,1,20));
+disp(cc);
+% Optimal psi0, psi1
+[p0,p2] = aa.getOptimalPsi;
+aa.psi0 = p0;
+aa.psi2 = p2;
+cc.updateTransients;
+E_RMF = cc.computeE_RMF(30)  % evaluate optimal cost
+
