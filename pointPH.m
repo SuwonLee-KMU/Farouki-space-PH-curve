@@ -36,6 +36,7 @@ classdef pointPH < handle
     parametricSpeed
     curvature
     torsion
+    tangent
     FrenetBasis
   end
 
@@ -53,7 +54,7 @@ classdef pointPH < handle
     function obj = updateTransients(obj)
       obj.positionVector  = curve(obj);
       obj.quaternionA     = getQuaternionAtPoint(obj);
-      obj.parametricSpeed = getParametricSpeed(obj);
+      [obj.parametricSpeed, obj.tangent] = getParametricSpeed(obj);
       obj.curvature       = getCurvature(obj);
       obj.torsion         = getTorsion(obj);
       obj.FrenetBasis     = getFrenetBasis(obj);
@@ -68,15 +69,16 @@ classdef pointPH < handle
         quaternionA(i,:) = A0*(1-xi(i))^2 + A1*2*(1-xi(i))*xi(i) + A2*xi(i)^2;
       end
     end
-    function parametricSpeed = getParametricSpeed(obj)
+    function [parametricSpeed,tangentVector] = getParametricSpeed(obj)
       xi  = obj.spacePHparameter;
       nxi = numel(xi);
       A  = obj.getQuaternionAtPoint;
       tangentVector = zeros(nxi,3);
-      for i = 1:nxi
-        cA = spacePH.quatConj(A(i,:));
-        tangentVector(i,:) = spacePH.AiA(A(i,:),cA);
-      end
+      % for i = 1:nxi
+        % cA = spacePH.quatConj(A(i,:));
+        % tangentVector(i,:) = spacePH.AiA(A(i,:),cA);
+      % end
+      tangentVector = obj.curveDerivative;
       parametricSpeed = vecnorm(tangentVector,2,2);
     end
     function curvature = getCurvature(obj)

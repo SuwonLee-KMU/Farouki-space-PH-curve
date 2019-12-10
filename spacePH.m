@@ -9,7 +9,7 @@ classdef spacePH < handle
     finalPosition
     finalUnitTangent
     desiredArcLength
-    psi0 = pi;
+    psi0 = 0;
     psi2 = 0;
   end
   properties (Transient, SetAccess=protected)
@@ -63,19 +63,54 @@ classdef spacePH < handle
       alpha = quaternionA(1) + quaternionA(2)*i;
       beta  = quaternionA(4) + quaternionA(3)*i;
     end
-    function [psi0_optimal,psi2_optimal] = getOptimalPsi(obj)
-      options  = optimoptions(@fmincon,'display','iter');
-      optFcn   = @(X) spacePH.costFcn(X(1),X(2),obj);
-      [x,fval] = fmincon(optFcn,[0;0],[],[],[],[],[0;0],[2*pi;2*pi],[],options);
-      disp(['Optimal \psi0 = ',num2str(x(1)*180/pi),' deg']);
-      disp(['Optimal \psi2 = ',num2str(x(2)*180/pi),' deg']);
-      disp(['Optimal cost = ',num2str(fval)]);
+    function [psi0_optimal,psi2_optimal] = getOptimalPsi(obj,varargin)
+      options  = optimoptions(@fmincon,'display','none','algorithm','active-set');
+      optFcn   = @(X) spacePH.costFcn(X,obj,'both');
+      if isempty(varargin)
+        [x,fval] = fmincon(optFcn,[0;0],[],[],[],[],[-pi;-pi],[pi;pi],[],options);
+      else
+          [x,fval] = fmincon(optFcn,varargin{1},[],[],[],[],[-pi;-pi],[pi;pi],[],options);
+      end
+      disp(num2str(fval));
+      % disp(['Optimal \psi0 = ',num2str(x(1)*180/pi),' deg']);
+      % disp(['Optimal \psi2 = ',num2str(x(2)*180/pi),' deg']);
+      % disp(['Optimal cost = ',num2str(fval)]);
       psi0_optimal = x(1);
       psi2_optimal = x(2);
+      obj = obj.updateTransients;
+    end
+    function psi = getOptimalPsi_fminbnd(obj,whichpsi)
+        switch whichpsi
+            case 'psi0'
+                optFcn = @(X) spacePH.costFcn(X,obj,'psi0');
+                [x,fval] = fminbnd(optFcn,-pi,0);
+            case 'psi2'
+                optFcn = @(X) spacePH.costFcn(X,obj,'psi2');
+                [x,fval] = fminbnd(optFcn,0,pi);
+            otherwise
+                error('Invalid whichpsi input');
+        end
+        psi = x;
+    end
+    function [psi0_optimal,psi2_optimal] = getOptimalPsi_PSO(obj)
+        options = optimoptions(@particleswarm,'display','iter',...
+            'swarmsize',50);
+        optFcn   = @(X) spacePH.costFcn(X,obj,'both');
+        [x,fval] = particleswarm(optFcn,2,[-pi,-pi],[pi,pi],options);
+        disp(['Optimal \psi0 = ',num2str(x(1)*180/pi),' deg']);
+        disp(['Optimal \psi2 = ',num2str(x(2)*180/pi),' deg']);
+        disp(['Optimal cost = ',num2str(fval)]);
+        psi0_optimal = x(1);
+        psi2_optimal = x(2);
+        obj = obj.updateTransients;
     end
     function pointPHobj = evaluate(obj,xi)
       pointPHobj = pointPH(obj);
       pointPHobj.spacePHparameter = xi;
+    end
+    function obj = setpsi(obj,psi0,psi2)
+      obj.psi0 = psi0;
+      obj.psi2 = psi2;
     end
   end
 
@@ -232,17 +267,40 @@ classdef spacePH < handle
   end
 
   methods (Static)  % For the optimization of psi0,psi2.
-    function E_RMF = costFcn(psi0,psi2,spacePHobj)
-      p_i = spacePHobj.initialPosition;
-      t_i = spacePHobj.initialUnitTangent;
-      p_f = spacePHobj.finalPosition;
-      t_f = spacePHobj.finalUnitTangent;
-      S   = spacePHobj.desiredArcLength;
-      A   = spacePH(p_i,p_f,t_i,t_f,S);
-      A.psi0 = psi0;
-      A.psi2 = psi2;
-      B     = A.evaluate(0);
-      E_RMF = B.computeE_RMF(30);
-    end 
+%     function E_RMF = costFcn(psi0,psi2,spacePHobj)
+%       p_i = spacePHobj.initialPosition;
+%       t_i = spacePHobj.initialUnitTangent;
+%       p_f = spacePHobj.finalPosition;
+%       t_f = spacePHobj.finalUnitTangent;
+%       S   = spacePHobj.desiredArcLength;
+%       A   = spacePH(p_i,p_f,t_i,t_f,S);
+%       A.psi0 = psi0;
+%       A.psi2 = psi2;
+%       B     = A.evaluate(0);
+%       E_RMF = B.computeE_RMF(100);
+%     end 
+    function E_RMF = costFcn(psi,spacePHobj,whichpsi)
+        p_i = spacePHobj.initialPosition;
+        t_i = spacePHobj.initialUnitTangent;
+        p_f = spacePHobj.finalPosition;
+        t_f = spacePHobj.finalUnitTangent;
+        S   = spacePHobj.desiredArcLength;
+        A   = spacePH(p_i,p_f,t_i,t_f,S);
+        A.psi0 = spacePHobj.psi0;
+        A.psi2 = spacePHobj.psi2;
+        switch whichpsi
+            case 'psi0'
+                A.psi0 = psi(1);
+            case 'psi2'
+                A.psi2 = psi(1);
+            case 'both'
+                A.psi0 = psi(1);
+                A.psi2 = psi(end);
+            otherwise
+                error('invalid whichpsi input');
+        end
+        B     = A.evaluate(0);
+        E_RMF = B.computeE_RMF(100);
+    end
   end
 end
